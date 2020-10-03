@@ -6,12 +6,12 @@
 package ca.mcmaster.cltlaugust2020.cplex;
 
 import static ca.mcmaster.cltlaugust2020.Constants.*;
+import ca.mcmaster.cltlaugust2020.Parameters;
 import ca.mcmaster.cltlaugust2020.bcp.BCP_Result;
 import ca.mcmaster.cltlaugust2020.drivers.TED_Driver;
 import ca.mcmaster.cltlaugust2020.bcp.TED;
-import ca.mcmaster.cltlaugust2020.bcp.Trigger;
+import ca.mcmaster.cltlaugust2020.bcp.Trigger; 
 import ca.mcmaster.cltlaugust2020.common.HyperCube;
-import ca.mcmaster.cltlaugust2020.heuristics.MOMS;
 import ilog.concert.IloException;
 import ilog.concert.IloNumVar;
 import ilog.cplex.IloCplex;
@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
 import org.apache.log4j.RollingFileAppender;
@@ -31,7 +32,7 @@ import org.apache.log4j.RollingFileAppender;
  *
  * @author tamvadss
  */
-public class TED_BranchHandler extends IloCplex.BranchCallback{
+public class TED_BranchHandler extends Base_BracnchHandler{
     
     private static Logger logger=Logger.getLogger(TED_BranchHandler.class);
     static {
@@ -76,7 +77,7 @@ public class TED_BranchHandler extends IloCplex.BranchCallback{
             
             if (nodeData!=null && nodeData.infeasibleCubeMap !=null && nodeData.infeasibleCubeMap.size()>ZERO) {
                 IntegerPair result = overruleCplexBranching( nodeData );
-                if (isMipRoot) logger.info (""+result.dominatingCount + ","+ result.fractionalCOunt);
+                if (isMipRoot) logger.info (""+result.bcp_Variable_Count + ","+ result.apex_trigger_count);
             }else {
                 //take default cplex branching
                 logger.warn("taking default cplex branching at node for lack of node data"+ getNodeId()) ;
@@ -113,52 +114,10 @@ public class TED_BranchHandler extends IloCplex.BranchCallback{
             return result;    
     }
         
-    private HyperCube    getFilteredCube      (HyperCube cube,  Map <String, Integer>  fixedVars) {
-        HyperCube result = cube;
-        
-        if (isConflict (cube,  fixedVars)){
-            result = null;
-        } else {
-            HyperCube newcube = new HyperCube();
-            newcube.zeroFixedVars.addAll( cube.zeroFixedVars);
-            newcube.oneFixedVars.addAll (cube.oneFixedVars);
-            
-            for ( Map.Entry <String, Integer> entry : fixedVars.entrySet()){
-                if (entry.getValue()==ZERO){
-                    newcube.zeroFixedVars.remove( entry.getKey());
-                }else {
-                    newcube.oneFixedVars.remove( entry.getKey());
-                }
-            }
-            
-            if (newcube.getSize()!=cube.getSize()){
-                result= newcube;
-            }
-            
-        }
-        
-        return result;    
-    }
+ 
     
         
-    private boolean isConflict (HyperCube hcube, Map<String, Integer> varFixings) {
-        boolean isConflict = false;
-        
-        for (String var : hcube.zeroFixedVars){
-            if (isConflict) break;
-            if (varFixings.keySet().contains(var) && varFixings.get(var)==ONE){
-                isConflict=true;                 
-            }
-        }
-        for (String var : hcube.oneFixedVars){
-            if (isConflict) break;
-            if (varFixings.keySet().contains(var) && varFixings.get(var)==ZERO){
-                isConflict=true;                 
-            }
-        }
-        
-        return   isConflict;
-    }
+  
     
     private IntegerPair overruleCplexBranching (NodePayload nodeData) throws IloException {
         
@@ -168,29 +127,48 @@ public class TED_BranchHandler extends IloCplex.BranchCallback{
         
         //first get the variables whose values have been fixed
         Map <String, Integer> fixedVars = new HashMap <String, Integer> () ;
-        List<String> fractionalVars = getFractionalAndFixedVars ( fixedVars) ;
+        //Map <String, Integer> integralVars = new HashMap <String, Integer> () ;
+        Set<String> fractionalVars = getFractionalAndFixedVars ( fixedVars) ;
         
                 
         //filter cubes , starting from size 2 cubes
         TreeMap <Integer, List<HyperCube > >  filteredCubes =getFilteredCubes (nodeData.infeasibleCubeMap, fixedVars) ;
         
-        Set<String > zeroDominatingTriggers =null;
-        Set<String> oneDominatingTriggers =null;
-               
-        Set<String> fractionalVars_forBCP = getFractionalVars_IncludedIn_SizeTwoCubes (filteredCubes, fractionalVars);
-        result.fractionalCOunt=fractionalVars_forBCP.size();
-        
-        if  (fractionalVars_forBCP.size()==ZERO){
+        Set<String > zeroDominatingTriggers =new HashSet<String> ();
+        Set<String> oneDominatingTriggers =new HashSet<String> ();
          
-            branchingVarName= (new MOMS()) .getBranchingVariableSuggestion (  filteredCubes, fractionalVars);
+        TreeMap<Double, Set<String >> fractionalVars_InSize2Cubes  =
+                get_FractionalVars_InSize2Cubes (filteredCubes.get(TWO),fractionalVars ) ;
+        
+        boolean only_One_priorty_Level_exists = fractionalVars_InSize2Cubes.size()==ONE && 
+                                                -BILLION == fractionalVars_InSize2Cubes.firstKey();
+        
+        Set<String> fractionalVars_forBCP =  new HashSet<String>();
+        double bandFloor =-BILLION;
+        if (fractionalVars_InSize2Cubes.size()>ZERO) {
+            bandFloor=getFractionalVarsInHighestBand ( fractionalVars_InSize2Cubes , fractionalVars_forBCP);
+        }
+        result.bcp_Variable_Count=fractionalVars_forBCP.size();
+        
+        if  (fractionalVars_forBCP.size()==ONE){
+            
+            List<String> fractionalVars_forBCP_list = new ArrayList<String> ( );
+            fractionalVars_forBCP_list.addAll(fractionalVars_forBCP );
+            branchingVarName = fractionalVars_forBCP_list.get(ZERO);
+            
+        }   else if  (fractionalVars_forBCP.size()==ZERO){
+         
+            branchingVarName=  getBranchingVariableSuggestion_MOMS (  filteredCubes, fractionalVars);
         }else {
             TED ted = new TED (fractionalVars_forBCP, filteredCubes  ) ;
              
-            ted.run(true, nodeData.inherited_ZeroDominators, nodeData.inherited_OneDominators, true);
+            result.apex_trigger_count =  ted.run(true, nodeData.inherited_ZeroDominators, nodeData.inherited_OneDominators, true);
+             
             
-            zeroDominatingTriggers =ted.getZeroDominatingTriggers();
-            oneDominatingTriggers = ted.getOneDominatingTriggers();
-            
+            List<Trigger> apexTriggers = ted.getAllApexTriggers (zeroDominatingTriggers,
+                                                                oneDominatingTriggers 
+                                                                ) ;
+             
             if (ted.isInfeasibilityDetected){
                 //
                 //get the only var in the TED maps
@@ -202,23 +180,14 @@ public class TED_BranchHandler extends IloCplex.BranchCallback{
                 }
             }else {
                 //
-                //check for apex trigger present on both sides
-                //
-                List<Trigger> triggersWithSmallestMetric =  ted.getTriggersWithSmallestMetric_on_EitherSide( false);
-                 
-                                
                 
-                if (triggersWithSmallestMetric.size()==ONE){
-                    branchingVarName = triggersWithSmallestMetric.get(ZERO).varName;
-                } else {
-                    //tie break;   
-                    //run ted again, on the other side for these variables
-                    branchingVarName =ted.runTheOtherSide_NoDeletion (triggersWithSmallestMetric) ;                       
-                }
-                   
+                ted.runTheOtherSide(apexTriggers);
+                branchingVarName = ted.getVariable_with_Largest_Volume_Metric(   bandFloor, ! only_One_priorty_Level_exists) ;
+                      
+                                              
             }
                     
-            result.dominatingCount = ted.getNumDominatingTriggers();
+            
         }
         
         //branch on this var and pass on filteredCubes  to the kids
@@ -300,94 +269,205 @@ public class TED_BranchHandler extends IloCplex.BranchCallback{
         childNodeData.inherited_OneDominators.remove( branchingVar);
     }
     
-    private Set<String> getFractionalVars_IncludedIn_SizeTwoCubes (
-            TreeMap <Integer, List<HyperCube > >  filteredCubes,
-            List<String> fractionalVars
-            ) {
+    
+    private String getBranchingVariableSuggestion_MOMS (TreeMap <Integer, List<HyperCube > > collectedInfeasibleHypercubes,
+            Set<String> fractionalVars) {
         
-        Set<String> result = new HashSet<String>();
+        List<String> candidateVars = new ArrayList <String> ();
+        candidateVars.addAll( fractionalVars);
         
-        List<HyperCube > sizeTwoCubes = filteredCubes.get(TWO);
-        if (sizeTwoCubes!=null){
+        for ( Map.Entry <Integer, List<HyperCube > > entry: collectedInfeasibleHypercubes .entrySet()){
+            if (candidateVars.size()==ONE ) break;
+            
+            TreeMap < String, Integer > frequencyMap = getVariableFrequency ( candidateVars,   entry.getValue() );
+            if (frequencyMap.size()>ZERO) candidateVars = getNewCandidates(frequencyMap);
+        }
+        
+        return candidateVars.get(ZERO) ;
+    }
+     
+    private TreeMap<Double, Set<String >> get_FractionalVars_InSize2Cubes (List<HyperCube > sizeTwoCubes ,
+            Set<String> fractionalVars) {
+        
+        TreeMap<Double, Set<String >> result = new TreeMap<Double, Set<String >> ();
+        
+        if (null!= sizeTwoCubes) {
             for (HyperCube twoCube: sizeTwoCubes){
+                
                 //
-                Map<String, Boolean> varsInThisCube = new HashMap <String ,Boolean> ();
-                for (String  var : twoCube.zeroFixedVars){
-                    varsInThisCube.put (var, false) ;
-                }
-                for (String  var : twoCube.oneFixedVars){
-                    varsInThisCube.put (var, true) ;
-                }
-                Set<String> setOfVarsInthisCube = varsInThisCube.keySet();
+                Set<String > setOfVarsInthisCube = new HashSet <String > ();
+                setOfVarsInthisCube.addAll (twoCube.getZeroFixedVars()) ;
+                setOfVarsInthisCube.addAll (twoCube.getOneFixedVars()) ;
+
+                //allVarsInSizeTWoCubes.addAll( setOfVarsInthisCube);
+
                 setOfVarsInthisCube.retainAll( fractionalVars);
-                
-                result.addAll( setOfVarsInthisCube);
-                
+
+
+
+                if (setOfVarsInthisCube.size()>ZERO){
+
+                    double thisCubesPriority = twoCube.getPriority();
+                    Set<String > current = result.get (thisCubesPriority ); 
+                    if (null == current) current = new HashSet<String> ( );
+                    current.addAll (setOfVarsInthisCube) ;
+                    result.put ( thisCubesPriority, current);
+                }
+
+
             }
         }
+        
         
         return result;
+        
     }
     
-    private void getArraysNeededForCplexBranching (String branchingVar,IloNumVar[][] vars ,
-                                                   double[ ][] bounds ,IloCplex.BranchDirection[ ][]  dirs ){
-        
-        IloNumVar branchingCplexVar = TED_Driver.mapOfAllVariablesInTheModel.get(branchingVar );
-        
+    //private
+    public double   getFractionalVarsInHighestBand ( TreeMap<Double, Set<String >> fractionalVars_InSize2Cubes ,
+            Set<String> result){
          
-        //    System.out.println("branchingCplexVar is "+ branchingCplexVar);
-         
+        double retval=-BILLION;
         
-        //get var with given name, and create up and down branch conditions
-        vars[ZERO] = new IloNumVar[ONE];
-        vars[ZERO][ZERO]= branchingCplexVar;
-        bounds[ZERO]=new double[ONE ];
-        bounds[ZERO][ZERO]=ZERO;
-        dirs[ZERO]= new IloCplex.BranchDirection[ONE];
-        dirs[ZERO][ZERO]=IloCplex.BranchDirection.Down;
-
-        vars[ONE] = new IloNumVar[ONE];
-        vars[ONE][ZERO]=branchingCplexVar;
-        bounds[ONE]=new double[ONE ];
-        bounds[ONE][ZERO]=ONE;
-        dirs[ONE]= new IloCplex.BranchDirection[ONE];
-        dirs[ONE][ZERO]=IloCplex.BranchDirection.Up;
-    }
-    
-    
-    private  List<String> getFractionalAndFixedVars (  Map <String, Integer> fixedVars) throws IloException {
-        
-        List<String>  fractionalVars = new ArrayList<String> ();
-        
-        IloNumVar[] allVariables = new  IloNumVar[TED_Driver.mapOfAllVariablesInTheModel.size()] ;
-        int index =ZERO;
-        for  (Map.Entry <String, IloNumVar> entry : TED_Driver.mapOfAllVariablesInTheModel.entrySet()) {
-            //
-            allVariables[index++] = entry.getValue();
-        }
-        IloCplex.IntegerFeasibilityStatus [] status =   getFeasibilities(allVariables);
-        
-        index =-ONE;
-        for (IloNumVar var: allVariables){
-            index ++;
-            //check if candidate is integer infeasible in the LP relax
-            if (status[index].equals( IloCplex.IntegerFeasibilityStatus.Infeasible)) {
-                fractionalVars.add(var.getName() );
-            }else {
-                //var is fixed if its upper and lower bounds are the same
-                Double ub = getUB(var) ;
-                Double lb = getLB(var) ;
-                if (ZERO==Double.compare( ub,  lb)){
-                    fixedVars.put (var.getName(), (int) Math.round(lb)) ;
+        if (fractionalVars_InSize2Cubes.size()> TWO + TWO*Parameters.MAX_INFEASIBLE_HYPERCUBE_SIZE){
+            
+            Set<String > minusInfinityPrioityVars = fractionalVars_InSize2Cubes.remove(DOUBLE_ZERO-BILLION);
+            
+            final double MIN =  fractionalVars_InSize2Cubes.firstKey();
+            final double WIDTH =( fractionalVars_InSize2Cubes.lastKey() - MIN )/(TWO + TWO*Parameters.MAX_INFEASIBLE_HYPERCUBE_SIZE);
+            final double MAX = fractionalVars_InSize2Cubes.lastKey();
+            
+            for (Map.Entry<Double, Set<String >> entry :fractionalVars_InSize2Cubes.descendingMap().entrySet()){
+                if (entry.getKey() >=MAX- WIDTH ){
+                    result.addAll(entry.getValue() );
+                }else {
+                    retval = MAX- WIDTH;
+                    break;
                 }
+            }
+            
+            if (minusInfinityPrioityVars!=null){
+                //put it back
+                fractionalVars_InSize2Cubes.put (DOUBLE_ZERO-BILLION, minusInfinityPrioityVars) ;
+                 
+            }
+            
+        }else {
+            Map.Entry<Double, Set<String >> entry = fractionalVars_InSize2Cubes.lastEntry();
+            retval =   entry.getKey();
+            result.addAll( entry.getValue());
+        }
+        
+        return retval ;
+    }
+    
+    /*private   void   getFractionalVars_IncludedIn_SizeTwoCubes (
+            List<HyperCube > sizeTwoCubes ,
+            Set<String> fractionalVars, Set<String> highPriortyCandidates
+            ) {
+        
+        
+        
+        double highestKnownPriority  = -BILLION;
+        
+        
+        //Set<String> allVarsInSizeTWoCubes = new HashSet<String>();
+        
+        
+        if (sizeTwoCubes!=null){
+            for (HyperCube twoCube: sizeTwoCubes){
+                
+                //
+                Set<String > setOfVarsInthisCube = new HashSet <String > ();
+                setOfVarsInthisCube.addAll (twoCube.getZeroFixedVars()) ;
+                setOfVarsInthisCube.addAll (twoCube.getOneFixedVars()) ;
+                
+                //allVarsInSizeTWoCubes.addAll( setOfVarsInthisCube);
+                
+                setOfVarsInthisCube.retainAll( fractionalVars);
+                
+                
+                
+                if (setOfVarsInthisCube.size()>ZERO){
+                    
+                    double thisCubesPriority = twoCube.getPriority();
+                    
+                    if (highestKnownPriority < thisCubesPriority){
+                         highPriortyCandidates.clear();
+                         highPriortyCandidates.addAll (setOfVarsInthisCube) ;
+                         highestKnownPriority = thisCubesPriority;
+                    } else if (highestKnownPriority ==  thisCubesPriority){
+                         highPriortyCandidates.addAll (setOfVarsInthisCube) ;
+                    }
+                }
+
+                                
             }
         }
         
-        return fractionalVars;
+         
+    }*/
+    
+    
+    
+    /*private   Set<String>       get_Thousand_HighPriority_Vars( TreeMap<String, Double> prioritiesMap){
+        Set<String> results = new HashSet<String> ();
+         
         
-    }
+        TreeMap <Double, List<String>> varsBypriority = new  TreeMap <Double, List<String>> ();
+        for (Map.Entry<String, Double> entry :prioritiesMap.entrySet()){
+            String thisVar = entry.getKey();
+            Double thisPri = entry.getValue();
+            List<String> varsAtThisPri = varsBypriority.get( thisPri);
+            if (null==varsAtThisPri) varsAtThisPri = new ArrayList<String>();
+            varsAtThisPri.add (thisVar );
+            varsBypriority.put (thisPri, varsAtThisPri);
+        }
+        
+        for  ( Map.Entry <Double, List<String>> entry : varsBypriority.descendingMap().entrySet()){
+             
+            if (results.size()>= HUNDRED) break;
+                   
+            
+            results.addAll (entry.getValue()) ;
+        }
+        
+        return results;
+    }*/
     
-    
-    
+    /*private TreeMap<String, Double> get_HighestPriority_of_FractionalVar (List<HyperCube > sizeTwoCubes,
+            Set<String> fractionalVars){
+        
+        TreeMap<String, Double> prioritiesMap = new  TreeMap<String, Double> ();
+                
+        //List<HyperCube > sizeTwoCubes = filteredCubes.get(TWO);
+        if (sizeTwoCubes!=null){
+            for (HyperCube twoCube: sizeTwoCubes){
+                
+                double thisCubePriority = twoCube.getPriority();
+                
+                //
+                Set<String > setOfVarsInthisCube = new HashSet <String > ();
+                setOfVarsInthisCube.addAll (twoCube.getZeroFixedVars()) ;
+                setOfVarsInthisCube.addAll (twoCube.getOneFixedVars()) ;
+                
+                //allVarsInSizeTWoCubes.addAll( setOfVarsInthisCube);
+                
+                setOfVarsInthisCube.retainAll( fractionalVars);
+                
+                //update freq for these vars
+                for (String str : setOfVarsInthisCube){
+                    Double currentPri= prioritiesMap.get( str);                    
+                    if (null==currentPri || currentPri <thisCubePriority ) 
+                    prioritiesMap.put( str, thisCubePriority);
+                }
+                                
+            }
+        }
+        
+         
+        
+        return prioritiesMap;
+    }*/
     
 }

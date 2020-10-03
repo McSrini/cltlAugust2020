@@ -93,8 +93,8 @@ public class LowerBoundConstraint {
     private String getFreevar (HyperCube hyperCube,  List<String> vars ){
         String result = null;
         List<String> fixedVars = new ArrayList <String> () ;
-        fixedVars.addAll( hyperCube.oneFixedVars);
-        fixedVars.addAll( hyperCube.zeroFixedVars);
+        fixedVars.addAll( hyperCube.getOneFixedVars());
+        fixedVars.addAll( hyperCube.getZeroFixedVars());
         
         
         for (String var : vars){
@@ -117,9 +117,9 @@ public class LowerBoundConstraint {
             final List<String> vars = entry.getValue();
             final double coeff= entry.getKey();
             for (String var: vars){
-                if (hyperCube.oneFixedVars.contains(var )){
+                if (hyperCube.getOneFixedVars().contains(var )){
                     lhs += coeff;
-                }else if (!hyperCube.zeroFixedVars.contains(var )){
+                }else if (!hyperCube.getZeroFixedVars().contains(var )){
                     //use smallest possible value
                     lhs += (coeff<=ZERO? coeff: ZERO);
                 }
@@ -139,9 +139,9 @@ public class LowerBoundConstraint {
             final List<String> vars = entry.getValue();
             final double coeff= entry.getKey();
             for (String var: vars){
-                if (hyperCube.oneFixedVars.contains(var )){
+                if (hyperCube.getOneFixedVars().contains(var )){
                     lhs += coeff;
-                }else if (!hyperCube.zeroFixedVars.contains(var )){
+                }else if (!hyperCube.getZeroFixedVars().contains(var )){
                     //use largest possible value
                     lhs += (coeff>=ZERO? coeff: ZERO);
                 }

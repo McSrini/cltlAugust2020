@@ -60,7 +60,7 @@ public class Strong_Driver extends BaseDriver {
         
         
            
-        solve (mip, new EmptyBranchHandler(), true) ; 
+        solve (mip, new EmptyBranchHandler(), null) ; 
         
        
         

@@ -9,7 +9,7 @@ import static ca.mcmaster.cltlaugust2020.Constants.*;
 import static ca.mcmaster.cltlaugust2020.Parameters.*;
 import ca.mcmaster.cltlaugust2020.bcp.*;
 import ca.mcmaster.cltlaugust2020.collection.*;
-import ca.mcmaster.cltlaugust2020.common.*; 
+import ca.mcmaster.cltlaugust2020.common.*;
 import ca.mcmaster.cltlaugust2020.cplex.*; 
 import ca.mcmaster.cltlaugust2020.utils.*;
 import ilog.concert.IloException;
@@ -33,22 +33,26 @@ import org.apache.log4j.RollingFileAppender;
  * Strong branching for   integer programming solvers using Boolean Constraint propagation
  * 
  */
-public class TED_Driver extends BaseDriver{
+public class MOHP_Driver extends BaseDriver{
     
     private  static List<LowerBoundConstraint> mipConstraintList ;
     
+    
+    
+    
+     
     private static TreeMap < String, Integer> frequencyOfVariables  = new TreeMap < String, Integer>();
     
-    public  static TreeSet<Double> allPriorityLevels=null;
+  
     
      
     static {
-        logger=Logger.getLogger(TED_Driver.class);
+        logger=Logger.getLogger(MOHP_Driver.class);
         logger.setLevel(LOGGING_LEVEL);
         PatternLayout layout = new PatternLayout("%5p  %d  %F  %L  %m%n");     
         try {
             RollingFileAppender rfa =new  
-                RollingFileAppender(layout,LOG_FOLDER+TED_Driver.class.getSimpleName()+ LOG_FILE_EXTENSION);
+                RollingFileAppender(layout,LOG_FOLDER+MOHP_Driver.class.getSimpleName()+ LOG_FILE_EXTENSION);
             rfa.setMaxBackupIndex(SIXTY);
             logger.addAppender(rfa);
             logger.setAdditivity(false);            
@@ -87,12 +91,12 @@ public class TED_Driver extends BaseDriver{
             for (LowerBoundConstraint lbc : mipConstraintList ){
                 lbc.sortByFrequency( frequencyOfVariables);
             }
-              
+            
             
             cubeCollector=new HypercubeCollector ( ) ;
             cubeCollector.collect(mipConstraintList );
             cubeCollector.printStatistics();
-            allPriorityLevels=  cubeCollector. getAllPriorityLevels ();
+            
             /*Validator validator = new Validator () ;
             for (Map.Entry<Integer, List<HyperCube>> entry :cubeCollector.collectedInfeasibleHypercubes.entrySet()){
                 for (HyperCube cube : entry.getValue()){
@@ -102,19 +106,18 @@ public class TED_Driver extends BaseDriver{
             }*/
              
            
-            
              
-            TED_BranchHandler tedHandler = new TED_BranchHandler (cubeCollector.collectedInfeasibleHypercubes);
+            
+            MOHP_BranchHandler mohp_Handler = new MOHP_BranchHandler ( cubeCollector.collectedInfeasibleHypercubes_byPriority);
            
            
-            solve (mip, tedHandler, null) ;  
+            solve (mip, mohp_Handler , null) ;  
 
             
-            logger.info("TED driver Completed successfully !" + mip.getStatus()) ;
+            logger.info("MOHP driver Completed successfully !" + mip.getStatus()) ;
             
                     
         } catch ( Exception ex ) {
-            ex.printStackTrace();
             System.err.println(ex) ;
             exit(ONE);
         }

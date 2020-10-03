@@ -5,12 +5,15 @@
  */
 package ca.mcmaster.cltlaugust2020.cplex;
 
+import ca.mcmaster.cltlaugust2020.common.HyperCube;
+import java.util.List;
+import java.util.TreeMap;
+
 /**
  *
  * @author tamvadss
  */
-public class IntegerPair {
-    public int apex_trigger_count;
-    public int bcp_Variable_Count;
+public class MOHP_Payload {
+    TreeMap <Double, List<HyperCube > > infeasibleHypercubes_byPriority=null;
     
 }

@@ -33,9 +33,9 @@ public class Validator {
          List<IloNumVar> varList = getVariables(mip) ;
          
          for (IloNumVar var : varList){
-             if (cube.zeroFixedVars.contains( var.getName())){
+             if (cube.getZeroFixedVars().contains( var.getName())){
                  var.setUB( ZERO);
-             }else if (cube.oneFixedVars.contains( var.getName())) {
+             }else if (cube.getOneFixedVars().contains( var.getName())) {
                  var.setLB(ONE);
              }
          }

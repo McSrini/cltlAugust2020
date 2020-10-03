@@ -7,14 +7,21 @@ package ca.mcmaster.cltlaugust2020.utils;
 
 import static ca.mcmaster.cltlaugust2020.Constants.*;
 import ca.mcmaster.cltlaugust2020.common.*;
+import static ca.mcmaster.cltlaugust2020.drivers.BaseDriver.frequencyCredits;
 import ca.mcmaster.cltlaugust2020.drivers.TED_Driver;
 import ilog.concert.IloException;
 import ilog.concert.IloLPMatrix;
+import ilog.concert.IloLinearNumExpr;
+import ilog.concert.IloLinearNumExprIterator;
 import ilog.concert.IloNumVar;
+import ilog.concert.IloObjective;
+import ilog.concert.IloObjectiveSense;
 import ilog.concert.IloRange;
 import ilog.cplex.IloCplex;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -82,8 +89,8 @@ public class MIP_Reader {
                     //this vars freq up by 2
                     int thisVarsFreq = frequencyOfVariables.containsKey (var) ? frequencyOfVariables.get (var):ZERO;
                     int credits = ZERO;
-                    if (TED_Driver.frequencyCredits.containsKey(numVarsInConstraint )){
-                        credits= TWO*TED_Driver.frequencyCredits.get(numVarsInConstraint );
+                    if (frequencyCredits.containsKey(numVarsInConstraint )){
+                        credits= TWO*frequencyCredits.get(numVarsInConstraint );
                     }
                     frequencyOfVariables.put (var, thisVarsFreq+credits) ;
                     
@@ -104,8 +111,8 @@ public class MIP_Reader {
                     
                     int thisVarsFreq = frequencyOfVariables.containsKey (var) ? frequencyOfVariables.get (var):ZERO;
                     int credits = ZERO;
-                    if (TED_Driver.frequencyCredits.containsKey(numVarsInConstraint )){
-                        credits= TED_Driver.frequencyCredits.get(numVarsInConstraint );
+                    if (frequencyCredits.containsKey(numVarsInConstraint )){
+                        credits= frequencyCredits.get(numVarsInConstraint );
                     }
                     frequencyOfVariables.put (var, thisVarsFreq+  credits) ;
                     
@@ -123,6 +130,27 @@ public class MIP_Reader {
           
     }
     
+    public static TreeMap<String, Double> getObjective (IloCplex cplex) throws IloException {
+        
+        TreeMap<String, Double>  objectiveMap = new TreeMap<String, Double>();
+        
+        IloObjective  obj = cplex.getObjective();
+       
+        IloLinearNumExpr expr = (IloLinearNumExpr) obj.getExpr();
+                 
+        IloLinearNumExprIterator iter = expr.linearIterator();
+        while (iter.hasNext()) {
+           IloNumVar var = iter.nextNumVar();
+           double val = iter.getValue();
+           
+           objectiveMap.put(var.getName(),   val   );
+           
+        }
+        
+        return  objectiveMap ;
+        
+         
+    }
         
     public static List<IloNumVar> getVariables (IloCplex cplex) throws IloException{
         List<IloNumVar> result = new ArrayList<IloNumVar>();

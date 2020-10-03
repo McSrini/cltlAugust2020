@@ -25,6 +25,10 @@ public class BCP_Result {
     public boolean isInfeasibilityDetected = false;      
     
     public  TreeMap<Integer, List<HyperCube>> remainingInfeasibleCubes =null;
+        
+    //volume of nogoods eliminated, key by priority, value not used
+    //public  TreeMap <Double, Boolean>  eliminated_Nogoods_Map  =  new  TreeMap <Double, Boolean>(); 
     
-  
+    public TreeMap <Double , Integer> volumeOf_removedCubes_ByPriority = new TreeMap <Double , Integer>();
+            
 }

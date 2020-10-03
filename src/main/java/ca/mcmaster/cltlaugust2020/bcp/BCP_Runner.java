@@ -6,6 +6,7 @@
 package ca.mcmaster.cltlaugust2020.bcp;
 
 import static ca.mcmaster.cltlaugust2020.Constants.*;
+import static ca.mcmaster.cltlaugust2020.Parameters.*;
 import ca.mcmaster.cltlaugust2020.common.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,6 +25,10 @@ public class BCP_Runner  {
         TreeMap<Integer, List<HyperCube>> remainingInfeasibleCubes = 
                 new TreeMap<Integer, List<HyperCube>> ();
         initRemainingInfeasibleCubes    (remainingInfeasibleCubes, infeasibleCubeMap)    ;
+        
+        //we also record some stats on cubes that conflit with the implications 
+        //TreeMap <Double, Boolean> eliminated_Nogoods_Map  =  new TreeMap <Double, Boolean> (); 
+        TreeMap <Double , Integer> volumeOf_removedCubes_ByPriority =  new     TreeMap <Double , Integer> ();
                 
         Map<String, Boolean> varFixings = new HashMap <String, Boolean> ();
         varFixings.put ( triggerVar, ZERO==triggerValue? false: true );  
@@ -33,7 +38,7 @@ public class BCP_Runner  {
         int numVarFixings = varFixings.size();
          
         do {
-            remainingInfeasibleCubes = performBCP(remainingInfeasibleCubes,  varFixings);
+            remainingInfeasibleCubes = performBCP(remainingInfeasibleCubes,  varFixings , volumeOf_removedCubes_ByPriority);
             if (  remainingInfeasibleCubes ==null /*isInfeasibilityDetected*/){
                 isInfeasibilityDetected= true;
                 break;
@@ -53,6 +58,7 @@ public class BCP_Runner  {
         bcpResult.isInfeasibilityDetected = isInfeasibilityDetected;
         bcpResult.varFixingsFound= varFixings;
         bcpResult.remainingInfeasibleCubes= remainingInfeasibleCubes;
+        bcpResult.volumeOf_removedCubes_ByPriority =volumeOf_removedCubes_ByPriority ;
         return bcpResult;
         
     }
@@ -65,7 +71,8 @@ public class BCP_Runner  {
     //if more than 2 left unmatched then add to new list of remainingInfeasibleCubes
     //if exactly 1 unmatched then collect and append new var fixing
     private TreeMap<Integer, List<HyperCube>> performBCP(TreeMap<Integer, List<HyperCube>> remainingInfeasibleCubes,  
-                                  Map<String, Boolean> varFixings){
+                                  Map<String, Boolean> varFixings  ,
+                                  TreeMap <Double , Integer> volumeOf_removedCubes_ByPriority){
         
         TreeMap<Integer, List<HyperCube>> new_RemainingInfeasibleCubes
                 = new TreeMap<Integer, List<HyperCube>> ();
@@ -86,9 +93,17 @@ public class BCP_Runner  {
                         //we must fix this var, BCP is happening !
                         Map.Entry <String, Boolean> onlyEntry = unMatched.firstEntry() ;
                         varFixings.put ( onlyEntry.getKey(), !  onlyEntry.getValue() );
+                        
+                        //record stats
+                        recordStats_for_ConflictingCube(cube,  volumeOf_removedCubes_ByPriority) ;
+                        
                     } else {
                         new_InfeasibleCubeList.add (cube );
                     }
+                }else {
+                    //record ststs on conflicting cube
+                    recordStats_for_ConflictingCube(cube,  volumeOf_removedCubes_ByPriority) ;
+                     
                 } 
             }
             
@@ -126,7 +141,7 @@ public class BCP_Runner  {
         
         TreeMap<String, Boolean> unMatched = new TreeMap<String, Boolean> ();
                 
-        for (String var : hyperCube.zeroFixedVars){
+        for (String var : hyperCube.getZeroFixedVars()){
             if (unMatched.size()>=TWO) break;
             if (null== varFixings.get( var)) {
                 unMatched.put(var, Boolean.FALSE);
@@ -134,7 +149,7 @@ public class BCP_Runner  {
             }
         }
         
-        for (String var : hyperCube.oneFixedVars){
+        for (String var : hyperCube.getOneFixedVars()){
             if (unMatched.size()>=TWO) break;
             if (null==varFixings.get( var)) {
                 unMatched.put(var, Boolean.TRUE);
@@ -150,13 +165,13 @@ public class BCP_Runner  {
     private boolean isConflict (HyperCube hcube, Map<String, Boolean> varFixings) {
         boolean isConflict = false;
         
-        for (String var : hcube.zeroFixedVars){
+        for (String var : hcube.getZeroFixedVars()){
             if (isConflict) break;
             if (varFixings.keySet().contains(var) && varFixings.get(var)==true){
                 isConflict=true;                 
             }
         }
-        for (String var : hcube.oneFixedVars){
+        for (String var : hcube.getOneFixedVars()){
             if (isConflict) break;
             if (varFixings.keySet().contains(var) && varFixings.get(var)==false){
                 isConflict=true;                 
@@ -166,5 +181,20 @@ public class BCP_Runner  {
         return   isConflict;
     }
     
+    
+    private void recordStats_for_ConflictingCube (HyperCube cube , TreeMap <Double , Integer> countOf_removedCubes_ByPriority){
+        
+        //
+        double thisPriority = cube.getPriority();
+        Integer currentVolume =  countOf_removedCubes_ByPriority.get( thisPriority );
+        if (null ==currentVolume) {
+            currentVolume = ZERO;
+        }
+        countOf_removedCubes_ByPriority.put (thisPriority , currentVolume +  cube.getVolume() ) ; // 2^-n
+        
+    }
+    
+    
+       
 }
 

@@ -55,7 +55,7 @@ public class Default_Driver extends BaseDriver {
         
         
          
-        solve (mip, new EmptyBranchHandler(), false) ;
+        solve (mip, new EmptyBranchHandler() , null) ;
            
         
         

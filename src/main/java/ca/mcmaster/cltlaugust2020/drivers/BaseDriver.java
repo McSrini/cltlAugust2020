@@ -5,23 +5,20 @@
  */
 package ca.mcmaster.cltlaugust2020.drivers;
 
-import static ca.mcmaster.cltlaugust2020.Constants.BILLION;
-import static ca.mcmaster.cltlaugust2020.Constants.ONE;
-import static ca.mcmaster.cltlaugust2020.Constants.SIXTY;
-import static ca.mcmaster.cltlaugust2020.Constants.THREE;
-import static ca.mcmaster.cltlaugust2020.Constants.TWO;
-import static ca.mcmaster.cltlaugust2020.Constants.ZERO;
-import static ca.mcmaster.cltlaugust2020.Parameters.FILE_STRATEGY;
-import static ca.mcmaster.cltlaugust2020.Parameters.MAX_TEST_DURATION_HOURS;
-import static ca.mcmaster.cltlaugust2020.Parameters.MAX_THREADS;
-import static ca.mcmaster.cltlaugust2020.Parameters.MIP_EMPHASIS_OPTIMALITY;
-import static ca.mcmaster.cltlaugust2020.Parameters.USE_BARRIER_FOR_SOLVING_LP;
-import static ca.mcmaster.cltlaugust2020.Parameters.*;
+import static ca.mcmaster.cltlaugust2020.Constants.*; 
+import static ca.mcmaster.cltlaugust2020.Parameters.*; 
 import ca.mcmaster.cltlaugust2020.cplex.EmptyBranchHandler;
 import ilog.concert.IloException;
+import ilog.concert.IloNumVar;
 import ilog.cplex.IloCplex;
 import ilog.cplex.IloCplex.BranchCallback;
+import ilog.cplex.IloCplex.NodeCallback;
 import java.io.File;
+import java.net.InetAddress;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import org.apache.log4j.Logger;
 
 /**
@@ -31,6 +28,15 @@ import org.apache.log4j.Logger;
 public abstract class BaseDriver {
     
     protected static Logger logger;
+    
+    public static TreeMap<String, Double> objectiveFunctionMap =null;
+    public static  TreeMap<String, IloNumVar> mapOfAllVariablesInTheModel = new TreeMap<String, IloNumVar> ();
+    
+    
+   
+      //freq credits map , 10 =1, 9 =2, 8= 4, 7 = 8, 6= 16, 5= 32, 4= 64, 3= 128, 2 = 256
+    public static TreeMap < Integer, Integer> frequencyCredits  = new TreeMap < Integer, Integer>();
+    
     
     protected static boolean isHaltFilePresent (){
         File file = new File("haltfile.txt");         
@@ -51,7 +57,7 @@ public abstract class BaseDriver {
     }
     
     protected static void solve (IloCplex mip, 
-            BranchCallback branch_callback, boolean useStrongForFirstHour ) throws IloException {
+            BranchCallback branch_callback /*, boolean useStrongForFirstHour */ , NodeCallback nodehandler) throws Exception {
         
         mip.setParam( IloCplex.Param.TimeLimit, SIXTY*  SIXTY);
         //switch to the correct number of threads
@@ -61,7 +67,9 @@ public abstract class BaseDriver {
         
         mip.setParam( IloCplex.Param.Emphasis.MIP, MIP_EMPHASIS_OPTIMALITY);
         
-        
+        final String dir =System.getProperty("user.dir");
+        final String hostname  = InetAddress.getLocalHost().getHostName();
+        logger.info ("Solve started "+  hostname + " " + dir + "\n MAX_TEST_DURATION_HOURS "+ MAX_TEST_DURATION_HOURS);
 
         if (USE_BARRIER_FOR_SOLVING_LP) {
             mip.setParam( IloCplex.Param.NodeAlgorithm  ,  IloCplex.Algorithm.Barrier);
@@ -70,11 +78,15 @@ public abstract class BaseDriver {
 
         mip.setParam( IloCplex.Param.MIP.Strategy.HeuristicFreq , -ONE);
         
-        if (useStrongForFirstHour) mip.setParam(IloCplex.Param.MIP.Strategy.VariableSelect  , THREE );
+        if (true /*useStrongForFirstHour*/) mip.setParam(IloCplex.Param.MIP.Strategy.VariableSelect  , THREE );
         if (USE_FULL_STRONG) mip.setParam(IloCplex.Param.MIP.Limits.StrongCand  ,BILLION);
         //if (USE_FULL_STRONG) mip.setParam(IloCplex.Param.MIP.Limits.StrongIt, BILLION );
 
         mip.use (branch_callback) ;
+        if (null!=nodehandler) {
+            mip.use(nodehandler);
+            mip.setParam( IloCplex.Param.Threads, ONE);
+        }
              
        
         for (int hours = ONE; hours <= MAX_TEST_DURATION_HOURS ; hours ++){                
@@ -84,11 +96,13 @@ public abstract class BaseDriver {
             
             if (hours == RAMP_UP_DURATION_HOURS){
                 //restore default branching
-                mip.setParam(IloCplex.Param.MIP.Strategy.VariableSelect  , ZERO );
+                //mip.setParam(IloCplex.Param.MIP.Strategy.VariableSelect  , ZERO );
 
                 //remove TED callback if any
+                mip.clearCallbacks();
                 mip.use (new EmptyBranchHandler() );
-                //logger.info ("Special callback removed" );
+                mip.setParam( IloCplex.Param.Threads, MAX_THREADS);
+                logger.info ("Special callback removed" );
             }
             
             if (isHaltFilePresent()) break;
@@ -99,5 +113,15 @@ public abstract class BaseDriver {
         }
     }
     
-    
+    protected static boolean isEvryVariableInTheObjective (){
+        Set<String> allvars = mapOfAllVariablesInTheModel.keySet();
+        Set<String> objVars  = new HashSet<String> ();
+        for (Map.Entry<String, Double> entry :objectiveFunctionMap.entrySet()){
+            if (DOUBLE_ZERO!=entry.getValue()){
+                objVars.add(entry.getKey()) ;
+            }
+        }
+        
+        return allvars.size()==objVars.size();
+    }
 }
