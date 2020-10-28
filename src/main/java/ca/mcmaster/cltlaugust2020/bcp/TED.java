@@ -6,6 +6,7 @@
 package ca.mcmaster.cltlaugust2020.bcp;
 
 import static ca.mcmaster.cltlaugust2020.Constants.*;
+import static ca.mcmaster.cltlaugust2020.Parameters.PERF_VARIABILITY_RANDOM_GENERATOR;
 import ca.mcmaster.cltlaugust2020.common.HyperCube; 
 import ca.mcmaster.cltlaugust2020.drivers.TED_Driver;
 import java.util.ArrayList;
@@ -102,7 +103,8 @@ public class TED {
             
         }
         //System.out.println("suggestions "+ suggestions.size() + " metrics "+ bestKnownPrimaryMetric + ", "+bestKnownSecondaryMetric) ;
-        return suggestions.get(ZERO);
+        int randomPosition = PERF_VARIABILITY_RANDOM_GENERATOR.nextInt(suggestions.size() );
+        return suggestions.get( randomPosition);
     }
   
     public List<Trigger> getAllApexTriggers (Set<String >  zeroDominatingTriggers, 

@@ -69,7 +69,10 @@ public abstract class BaseDriver {
         
         final String dir =System.getProperty("user.dir");
         final String hostname  = InetAddress.getLocalHost().getHostName();
-        logger.info ("Solve started "+  hostname + " " + dir + "\n MAX_TEST_DURATION_HOURS "+ MAX_TEST_DURATION_HOURS);
+        logger.info ("Solve started "+  hostname + " " + dir + "\n MAX_TEST_DURATION_HOURS "+ MAX_TEST_DURATION_HOURS +
+                 " , MAX_INFEASIBLE_HYPERCUBE_SIZE =  "+ MAX_INFEASIBLE_HYPERCUBE_SIZE +
+                " , RAMP_UP_DURATION_HOURS = "+ RAMP_UP_DURATION_HOURS +
+                ", PERF_VARIABILITY_RANDOM_SEED = "+ PERF_VARIABILITY_RANDOM_SEED);
 
         if (USE_BARRIER_FOR_SOLVING_LP) {
             mip.setParam( IloCplex.Param.NodeAlgorithm  ,  IloCplex.Algorithm.Barrier);
@@ -79,6 +82,7 @@ public abstract class BaseDriver {
         mip.setParam( IloCplex.Param.MIP.Strategy.HeuristicFreq , -ONE);
         
         if (true /*useStrongForFirstHour*/) mip.setParam(IloCplex.Param.MIP.Strategy.VariableSelect  , THREE );
+        
         if (USE_FULL_STRONG) mip.setParam(IloCplex.Param.MIP.Limits.StrongCand  ,BILLION);
         //if (USE_FULL_STRONG) mip.setParam(IloCplex.Param.MIP.Limits.StrongIt, BILLION );
 

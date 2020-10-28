@@ -7,6 +7,7 @@ package ca.mcmaster.cltlaugust2020.cplex;
 
 import static ca.mcmaster.cltlaugust2020.Constants.*; 
 import ca.mcmaster.cltlaugust2020.Parameters;
+import static ca.mcmaster.cltlaugust2020.Parameters.PERF_VARIABILITY_RANDOM_GENERATOR;
 import ca.mcmaster.cltlaugust2020.common.HyperCube;
 import ilog.concert.IloException;
 import ilog.concert.IloNumVar;
@@ -152,7 +153,8 @@ public class MOHP_BranchHandler extends Base_BracnchHandler{
             if (frequencyMap.size()>ZERO) candidates = getNewCandidates(frequencyMap);
         }
         
-        return candidates.get(ZERO);
+        int randomPosition = PERF_VARIABILITY_RANDOM_GENERATOR.nextInt(candidates.size() );
+        return candidates.get(randomPosition);
     }
     
  

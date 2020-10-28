@@ -80,6 +80,9 @@ public class BCP_Runner  {
         boolean isInfeasibilityHit = false;
         
         for (Map.Entry<Integer, List<HyperCube>> entry :remainingInfeasibleCubes.entrySet()){
+            
+            if (entry.getKey()> FOUR) continue;
+            
             List<HyperCube> new_InfeasibleCubeList = new ArrayList<HyperCube> ();
             
             for (HyperCube cube : entry.getValue()){
